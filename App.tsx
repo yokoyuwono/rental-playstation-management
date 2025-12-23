@@ -2504,7 +2504,7 @@ export default function App() {
         </div>
 
         {/* Sticky Bottom Nav */}
-        <nav className="absolute bottom-0 left-0 right-0 bg-slate-900/90 backdrop-blur-lg border-t border-slate-800 p-2 flex justify-around items-center z-40 pb-6 pt-3">
+        <nav className="fixed bottom-0 left-0 right-0 bg-slate-900/90 backdrop-blur-lg border-t border-slate-800 p-2 flex justify-around items-center z-40 pb-6 pt-3">
           <button 
             onClick={() => setView('dashboard')} 
             className={`p-2 rounded-xl flex flex-col items-center gap-1 transition-colors ${view === 'dashboard' ? 'text-violet-400' : 'text-slate-500 hover:text-slate-300'}`}
