@@ -1028,7 +1028,9 @@ export default function App() {
 
   const handleSaveProduct = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (user?.role !== UserRole.ADMIN) return;
+    // Allow ADMIN or STAFF to save products (update stock/price/name)
+    if (user?.role !== UserRole.ADMIN && user?.role !== UserRole.STAFF) return;
+    
     const formData = new FormData(e.currentTarget);
     const newProd = {
         name: formData.get('name') as string, 
@@ -1050,6 +1052,7 @@ export default function App() {
   };
   
   const handleDeleteProduct = async (id: string) => {
+      // Deleting products remains an ADMIN only action for safety
       if (user?.role !== UserRole.ADMIN) return;
       if(confirm("Delete product?")) {
           if (useSupabase) await supabase.from('products').delete().eq('id', id);
@@ -1195,21 +1198,20 @@ export default function App() {
             <p className="text-slate-400">Welcome, {user.name} <span className="text-xs px-2 py-0.5 rounded bg-slate-800 uppercase ml-1">{user.role}</span></p>
           </div>
           
-          {user.role === UserRole.ADMIN ? (
-             <button 
-               onClick={() => setView('settings')}
-               className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors"
-             >
-               <Settings size={20} />
-             </button>
-          ) : (
-             <button 
-               onClick={handleLogout}
-               className="p-2 bg-slate-800 rounded-full text-rose-400 hover:text-rose-300 transition-colors"
-             >
-               <LogOut size={20} />
-             </button>
-          )}
+          <div className="flex gap-2">
+              <button 
+                onClick={() => setView('settings')}
+                className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors"
+              >
+                <Settings size={20} />
+              </button>
+              <button 
+                onClick={handleLogout}
+                className="p-2 bg-slate-800 rounded-full text-rose-400 hover:text-rose-300 transition-colors"
+              >
+                <LogOut size={20} />
+              </button>
+          </div>
         </header>
 
         {/* Stats Grid */}
@@ -1249,7 +1251,8 @@ export default function App() {
                             <span className="text-rose-400 text-sm font-bold flex items-center gap-2">
                                 <TrendingDown size={14}/> Low Stock ({lowStockProducts.length})
                             </span>
-                            {user.role === UserRole.ADMIN && (
+                            {/* Allow Staff or Admin to see Manage button */}
+                            {(user.role === UserRole.ADMIN || user.role === UserRole.STAFF) && (
                                 <Button variant="ghost" className="h-auto p-0 text-xs text-rose-400 underline" onClick={() => { setView('settings'); setSettingsTab('items'); }}>
                                     Manage
                                 </Button>
@@ -2088,16 +2091,36 @@ export default function App() {
   };
 
   const renderSettings = () => {
-     if (user?.role !== UserRole.ADMIN) {
+    //  Access Control Logic: 
+    //  Admin: Access everything
+    //  Staff: Access only 'items' (product management)
+    
+    // Check if user is allowed to see settings at all (Staff or Admin)
+    if (user?.role !== UserRole.ADMIN && user?.role !== UserRole.STAFF) {
          return <div className="p-4 text-center text-rose-500">Access Denied</div>;
-     }
+    }
+
+    // Define available tabs based on role
+    const availableTabs = user?.role === UserRole.ADMIN 
+        ? ['pricing', 'consoles', 'items', 'staff']
+        : ['items'];
+    
+    // If current tab is not allowed for this user, switch to the first available tab
+    // (e.g. if Staff tries to view 'pricing')
+    if (!availableTabs.includes(settingsTab as any)) {
+         // Use setTimeout to avoid render-loop warning, or just force render correct tab next time. 
+         // Since we are inside render, we shouldn't set state directly unless we return early or handle it.
+         // A cleaner way is to just render the content of the default tab without setting state, 
+         // OR ensure state is correct before rendering.
+         // For simplicity here, we'll just guard the renders below.
+    }
 
      return (
        <div className="space-y-6 pb-24 animate-fade-in">
          <header>
            <h1 className="text-2xl font-bold text-white mb-4">Settings</h1>
            <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide">
-              {['pricing', 'consoles', 'items', 'staff'].map(tab => (
+              {availableTabs.map(tab => (
                   <button
                     key={tab}
                     onClick={() => setSettingsTab(tab as any)}
@@ -2113,7 +2136,7 @@ export default function App() {
            </div>
          </header>
 
-         {settingsTab === 'pricing' && (
+         {settingsTab === 'pricing' && availableTabs.includes('pricing') && (
              <div className="space-y-4">
                  {[ConsoleType.PS3, ConsoleType.PS4, ConsoleType.PS5].map(type => (
                      <Card key={type}>
@@ -2151,7 +2174,7 @@ export default function App() {
              </div>
          )}
 
-         {settingsTab === 'consoles' && (
+         {settingsTab === 'consoles' && availableTabs.includes('consoles') && (
              <div className="space-y-4">
                  <Button className="w-full" onClick={() => { setEditingConsole(null); setShowConsoleModal(true); }}>
                      <Plus size={18}/> Add New Console
@@ -2175,7 +2198,7 @@ export default function App() {
              </div>
          )}
 
-         {settingsTab === 'items' && (
+         {(settingsTab === 'items' || (user?.role === UserRole.STAFF)) && availableTabs.includes('items') && (
              <div className="space-y-4">
                  <Button className="w-full" onClick={() => { setEditingProduct(null); setShowProductModal(true); }}>
                      <Plus size={18}/> Add New Product
@@ -2192,9 +2215,11 @@ export default function App() {
                                 <Button variant="secondary" className="px-2 py-1" onClick={() => { setEditingProduct(p); setShowProductModal(true); }}>
                                     <Edit size={14}/>
                                 </Button>
-                                <Button variant="danger" className="px-2 py-1" onClick={() => handleDeleteProduct(p.id)}>
-                                    <Trash2 size={14}/>
-                                </Button>
+                                {user?.role === UserRole.ADMIN && (
+                                    <Button variant="danger" className="px-2 py-1" onClick={() => handleDeleteProduct(p.id)}>
+                                        <Trash2 size={14}/>
+                                    </Button>
+                                )}
                              </div>
                          </div>
                      </Card>
@@ -2202,7 +2227,7 @@ export default function App() {
              </div>
          )}
 
-         {settingsTab === 'staff' && (
+         {settingsTab === 'staff' && availableTabs.includes('staff') && (
              <div className="space-y-4">
                  <Button className="w-full" onClick={() => { setEditingStaff(null); setShowStaffModal(true); }}>
                      <Plus size={18}/> Add Staff Account
