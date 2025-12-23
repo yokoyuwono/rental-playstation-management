@@ -582,6 +582,8 @@ export default function App() {
     const durationMinutes = Math.ceil(durationMs / 60000);
 
     let updatedMember = null;
+    let finalTotalPrice = rental.totalPrice;
+    let finalDiscount = 0;
 
     // 2. Process Membership Deduction
     if (rental.memberId && rental.isMembershipSession) {
@@ -591,22 +593,35 @@ export default function App() {
         if (member && member.activePackages.length > 0 && consoleItem) {
            // Find the first valid package to deduct from
            // Logic: Prioritize packages that support the console type, are not expired
-           // In complex scenario we might want to ask user which package, but for now take first valid.
            const pkgIndex = member.activePackages.findIndex(p => 
                p.validConsoleTypes.includes(consoleItem.type) && 
                new Date(p.expiryDate) > new Date()
-               // We don't filter by minutes > 0 here because we want to deduct even if it goes to 0 or was 0 (edge case)
-               // Ideally we stopped session before, but let's handle it.
            );
 
            if (pkgIndex >= 0) {
                const pkg = member.activePackages[pkgIndex];
-               const drinksCount = rental.items
-                    .filter(i => i.category === ProductCategory.DRINK)
-                    .reduce((sum, i) => sum + i.quantity, 0);
                
+               // --- FREE DRINK LOGIC: Only "Es Teh" ---
+               const esTehItems = rental.items.filter(i => i.productName === 'Es Teh');
+               const esTehCount = esTehItems.reduce((sum, i) => sum + i.quantity, 0);
+               
+               const freeDrinksUsed = Math.min(pkg.remainingDrinks, esTehCount);
+               
+               // Calculate Discount
+               let discount = 0;
+               let remainingFree = freeDrinksUsed;
+               for (const item of esTehItems) {
+                   if (remainingFree <= 0) break;
+                   const deduct = Math.min(remainingFree, item.quantity);
+                   discount += deduct * item.price;
+                   remainingFree -= deduct;
+               }
+               
+               finalDiscount = discount;
+               finalTotalPrice = Math.max(0, rental.totalPrice - finalDiscount);
+
                const newMinutes = Math.max(0, pkg.remainingMinutes - durationMinutes);
-               const newDrinks = Math.max(0, pkg.remainingDrinks - drinksCount);
+               const newDrinks = Math.max(0, pkg.remainingDrinks - freeDrinksUsed);
                
                const updatedPackages = [...member.activePackages];
                updatedPackages[pkgIndex] = {
@@ -617,23 +632,22 @@ export default function App() {
 
                updatedMember = {
                    ...member,
-                   totalRentals: member.totalRentals + 1,
                    activePackages: updatedPackages
                };
            }
         }
     } 
     
-    // If not membership deduction occurred (or member just didn't have package but was logged in)
-    if (!updatedMember && rental.memberId) {
-        const member = members.find(m => m.id === rental.memberId);
-        if (member) {
-            updatedMember = { 
-                ...member, 
-                totalRentals: member.totalRentals + 1, 
-                totalSpend: (member.totalSpend || 0) + rental.totalPrice 
-            };
-        }
+    // Update Member Stats (Rentals count & Spend)
+    if (rental.memberId) {
+         const memberToUpdate = updatedMember || members.find(m => m.id === rental.memberId);
+         if (memberToUpdate) {
+             updatedMember = {
+                 ...memberToUpdate,
+                 totalRentals: memberToUpdate.totalRentals + 1,
+                 totalSpend: (memberToUpdate.totalSpend || 0) + finalTotalPrice
+             };
+         }
     }
 
     if (updatedMember) {
@@ -652,16 +666,19 @@ export default function App() {
     const endedRental: RentalSession = {
       ...rental,
       isActive: false,
-      endTime: endTime
+      endTime: endTime,
+      totalPrice: finalTotalPrice,
+      discountAmount: finalDiscount
     };
 
     if (useSupabase) {
         await supabase.from('rentals').update({
             is_active: false,
             end_time: endTime,
-            total_price: rental.totalPrice,
+            total_price: endedRental.totalPrice,
             subtotal_rental: rental.subtotalRental,
-            subtotal_items: rental.subtotalItems
+            subtotal_items: rental.subtotalItems,
+            discount_amount: endedRental.discountAmount
         }).eq('id', rentalId);
 
         await supabase.from('consoles').update({ status: 'available' }).eq('id', rental.consoleId);
