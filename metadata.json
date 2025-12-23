@@ -1,0 +1,7 @@
+{
+  "name": "PlayStation Rental OS",
+  "description": "A mobile-first rental management system for gaming lounges with inventory tracking, time-based billing, membership management, and AI insights.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
