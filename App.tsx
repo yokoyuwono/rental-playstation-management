@@ -36,7 +36,11 @@ import {
   FileSpreadsheet,
   Receipt,
   CreditCard,
-  Wallet
+  Wallet,
+  Calendar,
+  Filter,
+  ArrowUpRight,
+  ArrowDownLeft
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -338,6 +342,9 @@ export default function App() {
 
   // Expense Modal
   const [showExpenseModal, setShowExpenseModal] = useState(false);
+
+  // History Filter State
+  const [historyFilter, setHistoryFilter] = useState<'daily' | 'weekly' | 'monthly'>('daily');
 
   // Settings View State
   const [settingsTab, setSettingsTab] = useState<'pricing' | 'consoles' | 'items' | 'staff'>('pricing');
@@ -857,33 +864,46 @@ export default function App() {
   // --- ACTIONS: EXPORT EXCEL ---
 
   const handleExportExcel = () => {
-    // 1. Filter: Completed sessions only, last 7 days (Weekly)
+    // Determine filter range based on historyFilter
     const now = new Date();
-    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
     
-    const weeklyRentals = rentals.filter(r => {
+    let filterDate: Date;
+    let title = "History Report";
+    
+    if (historyFilter === 'daily') {
+        filterDate = startOfDay;
+        title = `Daily_Report_${now.toISOString().split('T')[0]}`;
+    } else if (historyFilter === 'weekly') {
+        filterDate = startOfWeek;
+        title = `Weekly_Report_${now.toISOString().split('T')[0]}`;
+    } else {
+        filterDate = startOfMonth;
+        title = `Monthly_Report_${now.toISOString().split('T')[0]}`;
+    }
+
+    const filteredRentals = rentals.filter(r => {
       if (r.isActive) return false;
-      const rDate = new Date(r.startTime);
-      return rDate >= oneWeekAgo && rDate <= now;
+      return new Date(r.startTime) >= filterDate;
     });
 
-    const weeklyMemberships = membershipLogs.filter(l => {
-        const lDate = new Date(l.timestamp);
-        return lDate >= oneWeekAgo && lDate <= now;
+    const filteredMemberships = membershipLogs.filter(l => {
+        return new Date(l.timestamp) >= filterDate;
     });
 
-    const weeklyExpenses = expenses.filter(e => {
-        const eDate = new Date(e.timestamp);
-        return eDate >= oneWeekAgo && eDate <= now;
+    const filteredExpenses = expenses.filter(e => {
+        return new Date(e.timestamp) >= filterDate;
     });
 
-    if (weeklyRentals.length === 0 && weeklyMemberships.length === 0 && weeklyExpenses.length === 0) {
-      alert("No history found for the last 7 days.");
+    if (filteredRentals.length === 0 && filteredMemberships.length === 0 && filteredExpenses.length === 0) {
+      alert("No history found for the selected period.");
       return;
     }
 
     // 2. Format Rental Data
-    const rentalRows = weeklyRentals.map(r => {
+    const rentalRows = filteredRentals.map(r => {
       const consoleName = consoles.find(c => c.id === r.consoleId)?.name || 'Unknown Console';
       const dateObj = new Date(r.startTime);
       const itemsDesc = r.items.map(i => `${i.productName} (x${i.quantity})`).join(', ');
@@ -900,7 +920,7 @@ export default function App() {
     });
 
     // 3. Format Membership Data
-    const membershipRows = weeklyMemberships.map(l => {
+    const membershipRows = filteredMemberships.map(l => {
         const dateObj = new Date(l.timestamp);
         return {
             "Date": dateObj.toLocaleDateString(),
@@ -914,7 +934,7 @@ export default function App() {
     });
 
     // 4. Format Expense Data
-    const expenseRows = weeklyExpenses.map(e => {
+    const expenseRows = filteredExpenses.map(e => {
         const dateObj = new Date(e.timestamp);
         return {
              "Date": dateObj.toLocaleDateString(),
@@ -934,7 +954,7 @@ export default function App() {
 
     // 5. Calculate Total Income
     const totalIncome = rentalRows.reduce((sum, r) => sum + r.Amount, 0) + membershipRows.reduce((sum, m) => sum + m.Amount, 0);
-    const totalExpense = weeklyExpenses.reduce((sum, e) => sum + e.amount, 0);
+    const totalExpense = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
     const netProfit = totalIncome - totalExpense;
 
     // 6. Add Summary Rows
@@ -970,10 +990,10 @@ export default function App() {
     // 7. Generate Worksheet & Workbook
     const worksheet = XLSX.utils.json_to_sheet(allRows);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Weekly Report");
+    XLSX.utils.book_append_sheet(workbook, worksheet, title);
 
     // 8. Download
-    XLSX.writeFile(workbook, `Weekly_Report_${now.toISOString().split('T')[0]}.xlsx`);
+    XLSX.writeFile(workbook, `${title}.xlsx`);
   };
 
   // --- ACTIONS: CRUD ---
@@ -1859,120 +1879,208 @@ export default function App() {
   );
 
   const renderHistory = () => {
-    // Merge Rental Sessions, Membership Logs, and Expenses
+    // 1. Determine Filter Date Range
+    const now = new Date();
+    let filterDate = new Date();
+    
+    if (historyFilter === 'daily') {
+        filterDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // Start of today
+    } else if (historyFilter === 'weekly') {
+        filterDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    } else {
+        filterDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    }
+
+    // 2. Filter Data
+    const filteredRentals = rentals.filter(r => !r.isActive && new Date(r.startTime) >= filterDate);
+    const filteredMemberships = membershipLogs.filter(l => new Date(l.timestamp) >= filterDate);
+    const filteredExpenses = expenses.filter(e => new Date(e.timestamp) >= filterDate);
+
+    // 3. Calculate Stats
+    const rentalIncome = filteredRentals.reduce((sum, r) => sum + r.totalPrice, 0);
+    const membershipIncome = filteredMemberships.reduce((sum, m) => sum + m.amount, 0);
+    const totalIncome = rentalIncome + membershipIncome;
+    const totalExpense = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
+    const netProfit = totalIncome - totalExpense;
+
+    // 4. Merge & Sort for List
     const combinedHistory = [
-      ...rentals.filter(r => !r.isActive).map(r => ({ ...r, entryType: 'rental' as const, dateStr: r.startTime })),
-      ...membershipLogs.map(l => ({ ...l, entryType: 'membership' as const, dateStr: l.timestamp })),
-      ...expenses.map(e => ({ ...e, entryType: 'expense' as const, dateStr: e.timestamp }))
+      ...filteredRentals.map(r => ({ ...r, entryType: 'rental' as const, dateStr: r.startTime })),
+      ...filteredMemberships.map(l => ({ ...l, entryType: 'membership' as const, dateStr: l.timestamp })),
+      ...filteredExpenses.map(e => ({ ...e, entryType: 'expense' as const, dateStr: e.timestamp }))
     ].sort((a, b) => new Date(b.dateStr).getTime() - new Date(a.dateStr).getTime());
+
+    // 5. Group by Date
+    const groupedHistory: Record<string, typeof combinedHistory> = {};
+    combinedHistory.forEach(item => {
+        const dateKey = new Date(item.dateStr).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+        if (!groupedHistory[dateKey]) groupedHistory[dateKey] = [];
+        groupedHistory[dateKey].push(item);
+    });
 
     return (
       <div className="space-y-6 pb-24 animate-fade-in">
+        {/* Header & Export */}
         <header className="flex justify-between items-center">
           <h1 className="text-2xl font-bold text-white">History</h1>
-          <Button variant="secondary" onClick={handleExportExcel}>
-             <FileSpreadsheet size={18} /> Export Report
+          <Button variant="secondary" onClick={handleExportExcel} className="text-xs px-3">
+             <FileSpreadsheet size={16} /> Export Report
           </Button>
         </header>
 
-        <div className="space-y-4">
-          {combinedHistory.length === 0 ? (
-              <div className="text-center text-slate-500 py-10">No history available</div>
+        {/* Filter Tabs */}
+        <div className="bg-slate-800 p-1 rounded-xl flex">
+            {(['daily', 'weekly', 'monthly'] as const).map(f => (
+                <button
+                    key={f}
+                    onClick={() => setHistoryFilter(f)}
+                    className={`flex-1 py-2 text-sm font-bold rounded-lg capitalize transition-all ${
+                        historyFilter === f 
+                        ? 'bg-slate-700 text-white shadow-lg' 
+                        : 'text-slate-500 hover:text-slate-300'
+                    }`}
+                >
+                    {f}
+                </button>
+            ))}
+        </div>
+
+        {/* Financial Summary Cards */}
+        <div className="grid grid-cols-3 gap-3">
+             <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3">
+                 <div className="flex items-center gap-1.5 mb-1 text-emerald-400">
+                     <ArrowDownLeft size={14} />
+                     <span className="text-[10px] uppercase font-bold tracking-wider">Income</span>
+                 </div>
+                 <div className="text-sm md:text-lg font-bold text-white truncate">
+                    {APP_SETTINGS.currency}{(totalIncome/1000).toFixed(0)}k
+                 </div>
+             </div>
+             <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-3">
+                 <div className="flex items-center gap-1.5 mb-1 text-rose-400">
+                     <ArrowUpRight size={14} />
+                     <span className="text-[10px] uppercase font-bold tracking-wider">Expense</span>
+                 </div>
+                 <div className="text-sm md:text-lg font-bold text-white truncate">
+                    {APP_SETTINGS.currency}{(totalExpense/1000).toFixed(0)}k
+                 </div>
+             </div>
+             <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3">
+                 <div className="flex items-center gap-1.5 mb-1 text-indigo-400">
+                     <Wallet size={14} />
+                     <span className="text-[10px] uppercase font-bold tracking-wider">Profit</span>
+                 </div>
+                 <div className={`text-sm md:text-lg font-bold truncate ${netProfit >= 0 ? 'text-indigo-200' : 'text-rose-300'}`}>
+                    {APP_SETTINGS.currency}{(netProfit/1000).toFixed(0)}k
+                 </div>
+             </div>
+        </div>
+
+        {/* Transaction List */}
+        <div className="space-y-6">
+          {Object.keys(groupedHistory).length === 0 ? (
+              <div className="text-center text-slate-500 py-10 flex flex-col items-center">
+                  <History size={48} className="opacity-20 mb-4"/>
+                  <p>No records found for this period.</p>
+              </div>
           ) : (
-              combinedHistory.map((item, idx) => {
-                // Determine Entry Type
-                if (item.entryType === 'rental') {
-                    const rental = item as RentalSession & { entryType: 'rental' };
-                    const consoleName = consoles.find(c => c.id === rental.consoleId)?.name || 'Unknown';
-                    const date = new Date(rental.startTime).toLocaleDateString();
-                    const time = new Date(rental.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                    
-                    return (
-                      <Card key={rental.id || idx} className="flex justify-between items-center">
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-bold text-white">{consoleName}</span>
-                            <span className="text-xs text-slate-500">{date} • {time}</span>
-                          </div>
-                          <div className="text-sm text-slate-400">
-                             {rental.customerName} {rental.isMembershipSession && <Crown size={12} className="inline text-amber-400"/>}
-                          </div>
-                          {rental.items.length > 0 && (
-                              <div className="text-xs text-slate-500 mt-1">
-                                  + {rental.items.length} items
-                              </div>
-                          )}
-                        </div>
-                        <div className="text-right">
-                           <div className="font-bold text-emerald-400 font-mono">
-                               + {APP_SETTINGS.currency}{rental.totalPrice.toLocaleString()}
-                           </div>
-                           <div className="text-xs text-slate-500">
-                               {rental.endTime && Math.ceil((new Date(rental.endTime).getTime() - new Date(rental.startTime).getTime())/60000)} mins
-                           </div>
-                        </div>
-                      </Card>
-                    );
-                } else if (item.entryType === 'membership') {
-                    const log = item as MembershipTransaction & { entryType: 'membership' };
-                    const date = new Date(log.timestamp).toLocaleDateString();
-                    const time = new Date(log.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+              Object.entries(groupedHistory).map(([date, items]) => (
+                  <div key={date}>
+                      <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 ml-1 sticky top-0 bg-slate-900/90 backdrop-blur py-2 z-10 w-fit px-2 rounded">
+                        {date}
+                      </h3>
+                      <div className="space-y-3">
+                        {items.map((item, idx) => {
+                            const dateObj = new Date(item.dateStr);
+                            const timeStr = dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 
-                    return (
-                        <Card key={log.id || idx} className="flex justify-between items-center border-l-4 border-l-amber-500 bg-slate-800/80">
-                             <div>
-                                <div className="flex items-center gap-2 mb-1">
-                                    <span className="font-bold text-amber-400 flex items-center gap-1"><CreditCard size={14}/> Membership</span>
-                                    <span className="text-xs text-slate-500">{date} • {time}</span>
-                                </div>
-                                <div className="text-sm text-white font-medium">
-                                    {log.memberName}
-                                </div>
-                                <div className="text-xs text-slate-400 mt-1">
-                                    {log.packageType} • {log.note || 'Purchase'}
-                                </div>
-                             </div>
-                             <div className="text-right">
-                                <div className="font-bold text-amber-400 font-mono">
-                                    + {APP_SETTINGS.currency}{log.amount.toLocaleString()}
-                                </div>
-                                <div className="text-xs text-slate-500">
-                                    Prepaid
-                                </div>
-                             </div>
-                        </Card>
-                    );
-                } else {
-                     const exp = item as ExpenseRecord & { entryType: 'expense' };
-                     const date = new Date(exp.timestamp).toLocaleDateString();
-                     const time = new Date(exp.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-
-                     return (
-                        <Card key={exp.id || idx} className="flex justify-between items-center border-l-4 border-l-rose-500 bg-slate-800/50">
-                             <div>
-                                <div className="flex items-center gap-2 mb-1">
-                                    <span className="font-bold text-rose-400 flex items-center gap-1"><TrendingDown size={14}/> Expense</span>
-                                    <span className="text-xs text-slate-500">{date} • {time}</span>
-                                </div>
-                                <div className="text-sm text-white font-medium truncate max-w-[150px]">
-                                    {exp.note}
-                                </div>
-                                <div className="text-xs text-slate-400 mt-1">
-                                    By {exp.staffName}
-                                </div>
-                             </div>
-                             <div className="text-right">
-                                <div className="font-bold text-rose-400 font-mono">
-                                    - {APP_SETTINGS.currency}{exp.amount.toLocaleString()}
-                                </div>
-                                <div className="text-xs text-slate-500">
-                                    Cost
-                                </div>
-                             </div>
-                        </Card>
-                     )
-                }
-              })
+                            if (item.entryType === 'rental') {
+                                const r = item as RentalSession & { entryType: 'rental' };
+                                const consoleName = consoles.find(c => c.id === r.consoleId)?.name || 'Unknown';
+                                return (
+                                    <div key={idx} className="bg-slate-800 rounded-lg p-3 border border-slate-700 border-l-4 border-l-slate-500 flex justify-between items-center shadow-md">
+                                        <div className="flex-1 min-w-0 pr-2">
+                                            <div className="flex justify-between items-start mb-1">
+                                                <span className="font-bold text-white truncate flex items-center gap-1.5">
+                                                    {consoleName}
+                                                </span>
+                                                <div className="text-right flex-shrink-0">
+                                                    <div className="font-mono text-emerald-400 font-bold text-sm">
+                                                        +{APP_SETTINGS.currency}{r.totalPrice.toLocaleString()}
+                                                    </div>
+                                                    <div className="text-[10px] text-slate-500">{r.endTime ? Math.ceil((new Date(r.endTime).getTime() - new Date(r.startTime).getTime())/60000) : 0} mins</div>
+                                                </div>
+                                            </div>
+                                            <div className="text-xs text-slate-400 mb-0.5 truncate flex items-center gap-1">
+                                                {r.customerName} {r.isMembershipSession && <Crown size={10} className="text-amber-400" />}
+                                            </div>
+                                            <div className="text-[10px] text-slate-600">
+                                                {dateObj.toLocaleDateString()} • {timeStr}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            } else if (item.entryType === 'membership') {
+                                const m = item as MembershipTransaction & { entryType: 'membership' };
+                                return (
+                                    <div key={idx} className="bg-slate-800 rounded-lg p-3 border border-slate-700 border-l-4 border-l-amber-500 flex justify-between items-center shadow-md">
+                                        <div className="flex-1 min-w-0 pr-2">
+                                            <div className="flex justify-between items-start mb-1">
+                                                <span className="font-bold text-amber-400 truncate flex items-center gap-1.5">
+                                                    <CreditCard size={14}/> Membership
+                                                </span>
+                                                <div className="text-right flex-shrink-0">
+                                                    <div className="font-mono text-amber-400 font-bold text-sm">
+                                                        +{APP_SETTINGS.currency}{m.amount.toLocaleString()}
+                                                    </div>
+                                                    <div className="text-[10px] text-slate-500">Prepaid</div>
+                                                </div>
+                                            </div>
+                                            <div className="text-xs text-white mb-0.5 truncate font-medium">
+                                                {m.memberName}
+                                            </div>
+                                            <div className="text-[10px] text-slate-500 truncate">
+                                                {m.packageType} • {m.note || 'New'}
+                                            </div>
+                                             <div className="text-[10px] text-slate-600 mt-0.5">
+                                                {dateObj.toLocaleDateString()} • {timeStr}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            } else {
+                                const e = item as ExpenseRecord & { entryType: 'expense' };
+                                return (
+                                    <div key={idx} className="bg-slate-800 rounded-lg p-3 border border-slate-700 border-l-4 border-l-rose-500 flex justify-between items-center shadow-md">
+                                        <div className="flex-1 min-w-0 pr-2">
+                                            <div className="flex justify-between items-start mb-1">
+                                                <span className="font-bold text-rose-400 truncate flex items-center gap-1.5">
+                                                    <TrendingDown size={14}/> Expense
+                                                </span>
+                                                <div className="text-right flex-shrink-0">
+                                                    <div className="font-mono text-rose-400 font-bold text-sm">
+                                                        -{APP_SETTINGS.currency}{e.amount.toLocaleString()}
+                                                    </div>
+                                                    <div className="text-[10px] text-slate-500">Cost</div>
+                                                </div>
+                                            </div>
+                                            <div className="text-xs text-white mb-0.5 truncate font-medium">
+                                                {e.note}
+                                            </div>
+                                            <div className="text-[10px] text-slate-500 truncate">
+                                                By {e.staffName}
+                                            </div>
+                                             <div className="text-[10px] text-slate-600 mt-0.5">
+                                                {dateObj.toLocaleDateString()} • {timeStr}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            }
+                        })}
+                      </div>
+                  </div>
+              ))
           )}
         </div>
       </div>
