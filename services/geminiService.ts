@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { RentalSession } from "../types";
 
@@ -44,7 +45,7 @@ export const suggestGameDescription = async (gameName: string): Promise<string> 
       model: 'gemini-3-flash-preview',
       contents: `Write a short, exciting, 1-sentence marketing tagline for the video game "${gameName}" to attract customers to play it.`,
     });
-    return response.text;
+    return response.text || "No description available.";
   } catch (error) {
     return "Cool game description loading...";
   }
@@ -76,7 +77,7 @@ export const analyzeCustomerHabits = async (history: RentalSession[]) => {
             }
         });
         
-        return JSON.parse(response.text);
+        return JSON.parse(response.text || '{}');
     } catch (e) {
         console.error(e);
         return null;

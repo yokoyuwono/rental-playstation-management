@@ -385,7 +385,7 @@ export default function App() {
         ]);
 
         if (cRes.data) setConsoles(cRes.data);
-        if (mRes.data) setMembers(mRes.data.map(m => ({
+        if (mRes.data) setMembers(mRes.data.map((m: any) => ({
             id: m.id,
             name: m.name,
             phone: m.phone,
@@ -397,7 +397,7 @@ export default function App() {
               : (m.active_package ? [m.active_package] : [])
         })));
         if (pRes.data) setProducts(pRes.data);
-        if (rRes.data) setRentals(rRes.data.map(r => ({
+        if (rRes.data) setRentals(rRes.data.map((r: any) => ({
             id: r.id,
             consoleId: r.console_id,
             customerName: r.customer_name,
@@ -413,7 +413,7 @@ export default function App() {
             totalPrice: r.total_price
         })));
         if (sRes.data) setStaffUsers(sRes.data);
-        if (mlRes.data) setMembershipLogs(mlRes.data.map(l => ({
+        if (mlRes.data) setMembershipLogs(mlRes.data.map((l: any) => ({
             id: l.id,
             memberId: l.member_id,
             memberName: l.member_name,
@@ -422,7 +422,7 @@ export default function App() {
             timestamp: l.timestamp,
             note: l.note
         })));
-        if (exRes.data) setExpenses(exRes.data.map(e => ({
+        if (exRes.data) setExpenses(exRes.data.map((e: any) => ({
             id: e.id,
             note: e.note,
             amount: e.amount,
