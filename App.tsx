@@ -336,6 +336,9 @@ export default function App() {
 
   const [tempMemberId, setTempMemberId] = useState<string>('');
   const [tempCustomerName, setTempCustomerName] = useState<string>('');
+  
+  // State for editable summary cost
+  const [summaryRentalCost, setSummaryRentalCost] = useState<number>(0);
 
   // --- DATA FETCHING ---
   
@@ -643,7 +646,7 @@ export default function App() {
     }
   };
 
-  const handleEndRental = async (rentalId: string) => {
+  const handleEndRental = async (rentalId: string, overrideRentalCost?: number) => {
     if (actionLoading) return;
     setActionLoading(true);
 
@@ -655,9 +658,14 @@ export default function App() {
         const durationMs = new Date(endTime).getTime() - new Date(rental.startTime).getTime();
         const durationMinutes = Math.ceil(durationMs / 60000);
 
+        // Determine Base Rental Cost (User Override or Calculated)
+        const usedRentalCost = overrideRentalCost !== undefined ? overrideRentalCost : rental.subtotalRental;
+
         let updatedMember = null;
-        let finalTotalPrice = rental.totalPrice;
         let finalDiscount = 0;
+        
+        // Calculate Base Total before membership logic (Rental + Items)
+        let calculatedTotal = usedRentalCost + rental.subtotalItems;
 
         // 2. Process Membership Deduction
         if (rental.memberId && rental.isMembershipSession) {
@@ -690,7 +698,6 @@ export default function App() {
                    }
                    
                    finalDiscount = discount;
-                   finalTotalPrice = Math.max(0, rental.totalPrice - finalDiscount);
 
                    const newMinutes = Math.max(0, pkg.remainingMinutes - durationMinutes);
                    const newDrinks = Math.max(0, pkg.remainingDrinks - freeDrinksUsed);
@@ -710,6 +717,9 @@ export default function App() {
             }
         } 
         
+        // Final Price Calculation
+        const finalTotalPrice = Math.max(0, calculatedTotal - finalDiscount);
+
         // Update Member Stats
         if (rental.memberId) {
              const memberToUpdate = updatedMember || members.find(m => m.id === rental.memberId);
@@ -739,6 +749,7 @@ export default function App() {
           isActive: false,
           endTime: endTime,
           totalPrice: finalTotalPrice,
+          subtotalRental: usedRentalCost,
           discountAmount: finalDiscount
         };
 
@@ -747,7 +758,7 @@ export default function App() {
                 is_active: false,
                 end_time: endTime,
                 total_price: endedRental.totalPrice,
-                subtotal_rental: rental.subtotalRental,
+                subtotal_rental: endedRental.subtotalRental,
                 subtotal_items: rental.subtotalItems,
                 discount_amount: endedRental.discountAmount
             }).eq('id', rentalId);
@@ -1608,7 +1619,10 @@ export default function App() {
           <Button 
             variant="danger" 
             className="w-full py-4 text-lg" 
-            onClick={() => setShowEndRentalSummary(true)}
+            onClick={() => {
+              setSummaryRentalCost(activeRental.subtotalRental);
+              setShowEndRentalSummary(true);
+            }}
           >
             <StopCircle className="mr-2" /> End Rental & Pay
           </Button>
@@ -1829,6 +1843,8 @@ export default function App() {
       const rental = getActiveRental(selectedConsoleId);
       if (!rental) return null;
 
+      const projectedTotal = summaryRentalCost + rental.subtotalItems;
+
       return (
         <div className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-6">
              <div className="bg-slate-900 rounded-2xl w-full max-w-sm border border-slate-700 p-6 animate-scale-up">
@@ -1841,9 +1857,17 @@ export default function App() {
                  </div>
 
                  <div className="space-y-3 mb-8 border-t border-b border-slate-800 py-4">
-                     <div className="flex justify-between text-slate-300">
+                     <div className="flex justify-between items-center text-slate-300">
                          <span>Rental Fee</span>
-                         <span>{APP_SETTINGS.currency}{rental.subtotalRental.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                         <div className="flex items-center gap-2">
+                            <span className="text-sm text-slate-500">{APP_SETTINGS.currency}</span>
+                            <input 
+                                type="number" 
+                                value={summaryRentalCost}
+                                onChange={(e) => setSummaryRentalCost(Math.max(0, parseInt(e.target.value) || 0))}
+                                className="w-24 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-right text-white font-mono focus:border-violet-500 outline-none"
+                            />
+                         </div>
                      </div>
                      <div className="flex justify-between text-slate-300">
                          <span>Items ({rental.items.reduce((a,b)=>a+b.quantity,0)})</span>
@@ -1852,13 +1876,13 @@ export default function App() {
                      <div className="flex justify-between items-center pt-2 mt-2 border-t border-slate-800">
                          <span className="font-bold text-white">Total To Pay</span>
                          <span className="font-bold text-2xl text-emerald-400 font-mono">
-                             {APP_SETTINGS.currency}{rental.totalPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                             {APP_SETTINGS.currency}{projectedTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                          </span>
                      </div>
                  </div>
 
                  <div className="space-y-3">
-                     <Button className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/50" onClick={() => handleEndRental(rental.id)} disabled={actionLoading}>
+                     <Button className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/50" onClick={() => handleEndRental(rental.id, summaryRentalCost)} disabled={actionLoading}>
                          {actionLoading ? 'Processing...' : 'Confirm Payment'}
                      </Button>
                      <Button variant="ghost" className="w-full" onClick={() => setShowEndRentalSummary(false)} disabled={actionLoading}>
