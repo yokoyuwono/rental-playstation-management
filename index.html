@@ -1,9 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="https://lucide.dev/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>PS Rental OS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -30,6 +31,7 @@
         background-color: #0f172a;
         color: #f8fafc;
         font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        overscroll-behavior-y: none; /* Disables pull-to-refresh on mobile */
       }
       /* Custom Scrollbar for gaming vibe */
       ::-webkit-scrollbar {
