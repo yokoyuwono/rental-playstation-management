@@ -271,9 +271,9 @@ const calculateDynamicCost = (
   // Iterate in 6-minute blocks (billing for every started 6-minute interval)
   while (current < end) {
     const hour = current.getHours();
-    // Day: 06:00 to 16:59 (6am - 5pm)
-    // Night: 17:00 to 05:59 (5pm - 6am)
-    const isDay = hour >= 6 && hour < 17;
+    // Day: 06:00 to 17:59 (6am - 6pm)
+    // Night: 18:00 to 05:59 (6pm - 6am)
+    const isDay = hour >= 6 && hour < 18;
     
     const rules = pricingRules[type] || pricingRules[ConsoleType.PS5]; // Fallback to PS5
     const hourlyRate = isDay ? rules.day : rules.night;
@@ -1512,7 +1512,7 @@ export default function App() {
 
     const rules = consoleData ? (pricingRules[consoleData.type] || pricingRules[ConsoleType.PS5]) : pricingRules[ConsoleType.PS5];
     const currentHour = new Date().getHours();
-    const isDay = currentHour >= 6 && currentHour < 17;
+    const isDay = currentHour >= 6 && currentHour < 18;
 
     return (
       <div className="fixed inset-0 bg-slate-900 z-50 flex flex-col animate-slide-up">
@@ -2093,7 +2093,7 @@ export default function App() {
                                 <span className="font-bold text-slate-300 block mb-2">{type}</span>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="text-xs text-slate-500 block mb-1">Day (06:00 - 17:00)</label>
+                                        <label className="text-xs text-slate-500 block mb-1">Day (06:00 - 18:00)</label>
                                         <div className="relative">
                                             <span className="absolute left-3 top-2.5 text-slate-500 text-sm">{APP_SETTINGS.currency}</span>
                                             <input 
@@ -2106,7 +2106,7 @@ export default function App() {
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="text-xs text-slate-500 block mb-1">Night (17:00 - 06:00)</label>
+                                        <label className="text-xs text-slate-500 block mb-1">Night (18:01 - 05:59)</label>
                                         <div className="relative">
                                             <span className="absolute left-3 top-2.5 text-slate-500 text-sm">{APP_SETTINGS.currency}</span>
                                             <input 
