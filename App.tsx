@@ -11,36 +11,36 @@ import {
   Play, 
   StopCircle, 
   Coffee, 
-  ShoppingCart,
-  Trash2,
-  Search,
-  X,
-  CheckCircle,
-  Menu,
-  ChevronRight,
-  Moon,
-  Sun,
-  BarChart3,
-  Edit,
-  Save,
-  Package,
-  LogOut,
-  Shield,
-  Lock,
-  User as UserIcon,
-  Crown,
-  Timer,
-  AlertTriangle,
-  TrendingDown,
-  CalendarClock,
-  FileSpreadsheet,
-  Receipt,
-  CreditCard,
-  Wallet,
-  Calendar,
-  Filter,
-  ArrowUpRight,
-  ArrowDownLeft
+  ShoppingCart, 
+  Trash2, 
+  Search, 
+  X, 
+  CheckCircle, 
+  Menu, 
+  ChevronRight, 
+  Moon, 
+  Sun, 
+  BarChart3, 
+  Edit, 
+  Save, 
+  Package, 
+  LogOut, 
+  Shield, 
+  Lock, 
+  User as UserIcon, 
+  Crown, 
+  Timer, 
+  AlertTriangle, 
+  TrendingDown, 
+  CalendarClock, 
+  FileSpreadsheet, 
+  Receipt, 
+  CreditCard, 
+  Wallet, 
+  Calendar, 
+  Filter, 
+  ArrowUpRight, 
+  ArrowDownLeft 
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -49,8 +49,8 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  ResponsiveContainer,
-  Cell
+  ResponsiveContainer, 
+  Cell 
 } from 'recharts';
 
 import { 
@@ -66,10 +66,10 @@ import {
   PricingRules, 
   User, 
   UserRole, 
-  PackageType,
-  MembershipTransaction,
-  MemberPackage,
-  ExpenseRecord
+  PackageType, 
+  MembershipTransaction, 
+  MemberPackage, 
+  ExpenseRecord 
 } from './types';
 import { 
   MOCK_CONSOLES, 
@@ -79,9 +79,9 @@ import {
   APP_SETTINGS, 
   PRICING_RULES, 
   MOCK_USERS, 
-  PACKAGE_DEFINITIONS,
-  MOCK_MEMBERSHIP_LOGS,
-  MOCK_EXPENSES
+  PACKAGE_DEFINITIONS, 
+  MOCK_MEMBERSHIP_LOGS, 
+  MOCK_EXPENSES 
 } from './constants';
 import { supabase, isSupabaseConfigured } from './services/supabase';
 
@@ -292,7 +292,14 @@ const calculateDynamicCost = (
 
 export default function App() {
   // --- STATE ---
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const saved = localStorage.getItem('PS_RENTAL_USER_SESSION');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
   const [view, setView] = useState<ViewState>('dashboard');
   
   const [consoles, setConsoles] = useState<Console[]>([]);
@@ -547,6 +554,7 @@ export default function App() {
   }, [user]);
 
   const handleLogout = () => {
+    localStorage.removeItem('PS_RENTAL_USER_SESSION');
     setUser(null);
     setView('dashboard');
   };
@@ -852,7 +860,7 @@ export default function App() {
              currentPackages[matchingPkgIndex] = {
                  ...oldPkg,
                  remainingMinutes: newRemainingMinutes,
-                 initialMinutes: newRemainingMinutes,
+                 initialMinutes: newRemainingMinutes, 
                  remainingDrinks: newRemainingDrinks,
                  initialDrinks: newRemainingDrinks, 
                  expiryDate: newExpiry.toISOString(),
@@ -1221,7 +1229,10 @@ export default function App() {
   // --- VIEWS ---
 
   if (!user) {
-    return <LoginScreen onLogin={(u) => setUser(u)} loading={loading} />;
+    return <LoginScreen onLogin={(u) => {
+        localStorage.setItem('PS_RENTAL_USER_SESSION', JSON.stringify(u));
+        setUser(u);
+    }} loading={loading} />;
   }
 
   // ... (dashboard and other render functions remain same)
@@ -2018,6 +2029,14 @@ export default function App() {
       <div className="space-y-3">
         {members.map(member => {
            const activePkg = member.activePackages.find(p => new Date(p.expiryDate) > new Date() && p.remainingMinutes > 0);
+           
+           // Calculate expiry days for urgency color
+           let expiryDays = 0;
+           if (activePkg) {
+               const diff = new Date(activePkg.expiryDate).getTime() - new Date().getTime();
+               expiryDays = Math.ceil(diff / (1000 * 60 * 60 * 24));
+           }
+
            return (
              <Card 
                key={member.id} 
@@ -2025,32 +2044,131 @@ export default function App() {
                    setSelectedMemberForAction(member);
                    setShowMemberActionModal(true);
                }}
-               className="cursor-pointer hover:border-violet-500/50 transition-colors"
+               className="cursor-pointer hover:border-violet-500/50 transition-all group relative overflow-hidden"
              >
-               <div className="flex justify-between items-start">
-                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 font-bold">
-                        {member.name.charAt(0)}
-                    </div>
-                    <div>
-                        <h3 className="font-bold text-white">{member.name}</h3>
-                        <p className="text-xs text-slate-400">{member.phone}</p>
-                    </div>
-                 </div>
-                 {activePkg ? (
-                     <div className="text-right">
-                         <span className="text-xs font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                             {activePkg.type}
+               {/* Decorative background for members with active package */}
+               {activePkg && <div className="absolute top-0 right-0 w-32 h-32 bg-violet-500/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none" />}
+
+               <div className="relative z-10">
+                   {/* Top Section: Profile & Status */}
+                   <div className="flex justify-between items-start mb-5">
+                     <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg shadow-inner ring-1 ring-white/10 ${
+                            activePkg 
+                            ? 'bg-gradient-to-br from-violet-600 to-indigo-700 text-white shadow-violet-500/20' 
+                            : 'bg-slate-800 text-slate-400'
+                        }`}>
+                            {member.name.charAt(0)}
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-white text-lg leading-tight flex items-center gap-2">
+                                {member.name}
+                                {activePkg && activePkg.type === 'Juragan' && <Crown size={14} className="text-amber-400 fill-amber-400/20" />}
+                            </h3>
+                            <p className="text-xs text-slate-400 font-mono mt-0.5">{member.phone}</p>
+                        </div>
+                     </div>
+                     
+                     {activePkg ? (
+                         <div className="text-right">
+                             <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border shadow-sm ${
+                                 activePkg.type === 'Juragan' 
+                                 ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' 
+                                 : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                             }`}>
+                                 {activePkg.type}
+                             </span>
+                             <div className={`text-[10px] font-medium mt-1.5 flex items-center justify-end gap-1 ${expiryDays <= 3 ? 'text-rose-400' : 'text-slate-500'}`}>
+                                 <CalendarClock size={10} />
+                                 {expiryDays <= 0 ? 'Expires Today' : `${expiryDays} days left`}
+                             </div>
+                         </div>
+                     ) : (
+                         <span className="text-[10px] font-bold text-slate-500 bg-slate-800 px-2 py-1 rounded-md border border-slate-700">
+                             GUEST
                          </span>
-                         <p className="text-xs text-slate-400 mt-1">
-                             {Math.floor(activePkg.remainingMinutes / 60)}h {activePkg.remainingMinutes % 60}m left
-                         </p>
-                     </div>
-                 ) : (
-                     <div className="text-xs text-slate-500 bg-slate-800 px-2 py-1 rounded">
-                         No Active Package
-                     </div>
-                 )}
+                     )}
+                   </div>
+
+                   {/* Middle Section: Quick Stats */}
+                   <div className="grid grid-cols-2 gap-3 mb-4">
+                        <div className="bg-slate-950/30 rounded-lg p-2.5 flex items-center gap-3 border border-slate-800/50">
+                             <div className="p-1.5 rounded bg-slate-800/80 text-slate-400">
+                                <Gamepad2 size={14} />
+                             </div>
+                             <div>
+                                 <p className="text-[10px] text-slate-500 uppercase font-bold leading-none mb-1">History</p>
+                                 <p className="text-xs font-bold text-slate-200">{member.totalRentals} Sessions</p>
+                             </div>
+                        </div>
+                        <div className="bg-slate-950/30 rounded-lg p-2.5 flex items-center gap-3 border border-slate-800/50">
+                             <div className="p-1.5 rounded bg-slate-800/80 text-slate-400">
+                                <Wallet size={14} />
+                             </div>
+                             <div>
+                                 <p className="text-[10px] text-slate-500 uppercase font-bold leading-none mb-1">Total Spent</p>
+                                 <p className="text-xs font-bold text-emerald-400">{APP_SETTINGS.currency}{(member.totalSpend || 0).toLocaleString(undefined, { notation: "compact", maximumFractionDigits: 1 })}</p>
+                             </div>
+                        </div>
+                   </div>
+
+                   {/* Bottom Section: Package Progress */}
+                   {activePkg && (
+                       <div className="space-y-3 pt-3 border-t border-slate-800/60">
+                            {/* Time Progress */}
+                            <div>
+                                <div className="flex justify-between items-end mb-1.5">
+                                    <span className="text-[11px] text-slate-400 flex items-center gap-1.5 font-medium">
+                                        <Timer size={12} className="text-violet-400"/> Remaining Time
+                                    </span>
+                                    <span className="text-[11px] font-mono text-slate-300">
+                                        <strong className="text-white text-xs">{Math.floor(activePkg.remainingMinutes / 60)}h {activePkg.remainingMinutes % 60}m</strong> 
+                                        <span className="text-slate-600"> / {Math.floor(activePkg.initialMinutes / 60)}h</span>
+                                    </span>
+                                </div>
+                                <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                                    <div 
+                                        className={`h-full rounded-full transition-all duration-500 ${
+                                            (activePkg.remainingMinutes / activePkg.initialMinutes) < 0.2 ? 'bg-rose-500' : 'bg-violet-500'
+                                        }`}
+                                        style={{ width: `${Math.min(100, (activePkg.remainingMinutes / activePkg.initialMinutes) * 100)}%` }}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Drinks Progress */}
+                            {activePkg.initialDrinks > 0 && (
+                                <div>
+                                     <div className="flex justify-between items-end mb-1.5">
+                                        <span className="text-[11px] text-slate-400 flex items-center gap-1.5 font-medium">
+                                            <Coffee size={12} className="text-amber-400"/> Free Drinks
+                                        </span>
+                                        <span className="text-[11px] font-mono text-slate-300">
+                                            <strong className="text-white text-xs">{activePkg.remainingDrinks}</strong> 
+                                            <span className="text-slate-600"> / {activePkg.initialDrinks}</span>
+                                        </span>
+                                    </div>
+                                    <div className="flex gap-1.5">
+                                        {Array.from({ length: activePkg.initialDrinks }).map((_, i) => (
+                                            <div 
+                                                key={i}
+                                                className={`h-1.5 flex-1 rounded-full transition-colors ${
+                                                    i < activePkg.remainingDrinks ? 'bg-amber-500' : 'bg-slate-800'
+                                                }`}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                       </div>
+                   )}
+               </div>
+               
+               {/* Hover Hint */}
+               <div className="absolute right-3 top-3 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">
+                    <div className="bg-slate-700/50 backdrop-blur text-white p-1.5 rounded-lg">
+                        <Edit size={12} />
+                    </div>
                </div>
              </Card>
            );
@@ -2393,7 +2511,7 @@ export default function App() {
       
       {/* Main Content Area */}
       <main className="max-w-md mx-auto min-h-screen relative shadow-2xl bg-slate-900 overflow-hidden">
-        <div className="h-full overflow-y-auto p-4 scrollbar-hide">
+        <div className="h-full overflow-y-auto p-4 scrollbar-hide overscroll-y-none">
           {view === 'dashboard' && renderDashboard()}
           {view === 'consoles' && renderConsoles()}
           {view === 'history' && renderHistory()}
