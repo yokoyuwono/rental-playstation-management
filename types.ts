@@ -85,15 +85,18 @@ export interface RentalSession {
   endTime?: string; // ISO string
   isActive: boolean;
   items: CartItem[];
-  
+
   // Membership specific
   isMembershipSession: boolean;
-  
+
   // Financials
   subtotalRental: number;
   subtotalItems: number;
   discountAmount: number; // Used for generic discounts if needed
   totalPrice: number;
+
+  // Payment Status
+  isPaid?: boolean;
 }
 
 export interface MembershipTransaction {

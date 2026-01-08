@@ -22,10 +22,10 @@ const nextWeek = new Date();
 nextWeek.setDate(nextWeek.getDate() + 5);
 
 export const MOCK_MEMBERS: Member[] = [
-  { 
-    id: 'm1', 
-    name: 'Yoko Dev', 
-    phone: '555-0101', 
+  {
+    id: 'm1',
+    name: 'Yoko Dev',
+    phone: '555-0101',
     totalRentals: 45,
     activePackages: [{
       id: 'pkg_1',
@@ -38,17 +38,17 @@ export const MOCK_MEMBERS: Member[] = [
       validConsoleTypes: [ConsoleType.PS4, ConsoleType.PS5] // PS4 Only Tier (includes PS5)
     }]
   },
-  { 
-    id: 'm2', 
-    name: 'John Doe', 
-    phone: '555-0102', 
+  {
+    id: 'm2',
+    name: 'John Doe',
+    phone: '555-0102',
     totalRentals: 2,
     activePackages: []
   },
-  { 
-    id: 'm3', 
-    name: 'Jane Smith', 
-    phone: '555-0103', 
+  {
+    id: 'm3',
+    name: 'Jane Smith',
+    phone: '555-0103',
     totalRentals: 12,
     activePackages: [{
       id: 'pkg_2',
@@ -72,42 +72,43 @@ export const MOCK_PRODUCTS: Product[] = [
 ];
 
 export const MOCK_RENTALS: RentalSession[] = [
-    {
-        id: 'r_hist_1',
-        consoleId: '2',
-        customerName: 'Walk-in',
-        startTime: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-        isActive: true,
-        items: [],
-        isMembershipSession: false,
-        subtotalRental: 0,
-        subtotalItems: 0,
-        discountAmount: 0,
-        totalPrice: 0
-    }
+  {
+    id: 'r_hist_1',
+    consoleId: '2',
+    customerName: 'Walk-in',
+    startTime: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
+    isActive: true,
+    items: [],
+    isMembershipSession: false,
+    subtotalRental: 0,
+    subtotalItems: 0,
+    discountAmount: 0,
+    totalPrice: 0,
+    isPaid: false
+  }
 ];
 
 export const MOCK_MEMBERSHIP_LOGS: MembershipTransaction[] = [
-    {
-        id: 'mt_1',
-        memberId: 'm1',
-        memberName: 'Yoko Dev',
-        packageType: 'Juragan',
-        amount: 65000,
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(), // 2 days ago
-        note: 'PS4/PS5'
-    }
+  {
+    id: 'mt_1',
+    memberId: 'm1',
+    memberName: 'Yoko Dev',
+    packageType: 'Juragan',
+    amount: 65000,
+    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(), // 2 days ago
+    note: 'PS4/PS5'
+  }
 ];
 
 export const MOCK_EXPENSES: ExpenseRecord[] = [
-    {
-        id: 'ex_1',
-        note: 'Restock Coca Cola (1 crate)',
-        amount: 150000,
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 1).toISOString(), // 1 day ago
-        staffId: 'u1',
-        staffName: 'Super Admin'
-    }
+  {
+    id: 'ex_1',
+    note: 'Restock Coca Cola (1 crate)',
+    amount: 150000,
+    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 1).toISOString(), // 1 day ago
+    staffId: 'u1',
+    staffName: 'Super Admin'
+  }
 ];
 
 export const APP_SETTINGS = {
