@@ -96,7 +96,11 @@ export interface RentalSession {
   totalPrice: number;
 
   // Payment Status
+  // Payment Status
   isPaid?: boolean;
+
+  // Duration
+  plannedDuration?: number; // in minutes
 }
 
 export interface MembershipTransaction {

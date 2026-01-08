@@ -343,6 +343,7 @@ export default function App() {
 
   const [tempMemberId, setTempMemberId] = useState<string>('');
   const [tempCustomerName, setTempCustomerName] = useState<string>('');
+  const [selectedDuration, setSelectedDuration] = useState<number>(0); // 0 = Open, otherwise minutes
 
   // State for editable summary cost
   const [summaryRentalCost, setSummaryRentalCost] = useState<number>(0);
@@ -556,6 +557,25 @@ export default function App() {
 
         const itemsCost = rental.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
+        // Auto-end check for fixed duration
+        if (rental.plannedDuration && rental.plannedDuration > 0) {
+          const startTime = new Date(rental.startTime).getTime();
+          const nowTime = new Date(now).getTime();
+          const elapsedMinutes = (nowTime - startTime) / 1000 / 60;
+
+          if (elapsedMinutes >= rental.plannedDuration) {
+            // We can't await inside this sync loop easily without potential race conditions or infinite loops if not careful.
+            // However, since handleEndRental is async and state updates are batched, 
+            // we should trigger it. usage of setTimeout prevents blocking this render cycle.
+            setTimeout(() => {
+              // Double check to prevent multiple triggers
+              if (rentals.find(r => r.id === rental.id)?.isActive) {
+                handleEndRental(rental.id);
+              }
+            }, 0);
+          }
+        }
+
         return {
           ...rental,
           subtotalRental: rentalCost,
@@ -717,7 +737,8 @@ export default function App() {
         subtotalItems: 0,
         discountAmount: 0,
         totalPrice: 0,
-        isPaid: false
+        isPaid: false,
+        plannedDuration: selectedDuration > 0 ? selectedDuration : undefined
       };
 
       if (useSupabase) {
@@ -734,7 +755,8 @@ export default function App() {
           subtotal_items: 0,
           discount_amount: 0,
           total_price: 0,
-          is_paid: false
+          is_paid: false,
+          planned_duration: newRental.plannedDuration // Assumes column exists
         });
         if (error) throw error;
 
@@ -747,6 +769,7 @@ export default function App() {
 
       setTempMemberId('');
       setTempCustomerName('');
+      setSelectedDuration(0);
       setShowStartRentalModal(false);
       setView('consoles');
     } catch (e) {
@@ -1835,6 +1858,32 @@ export default function App() {
                   </button>
                 )
               })}
+            </div>
+
+            <div id="planDuration" className="mb-4">
+              <label className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1 block">Duration Mode</label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => setSelectedDuration(0)}
+                  className={`p-2 rounded text-sm font-bold border transition-all ${selectedDuration === 0 ? 'bg-violet-600 border-violet-500 text-white shadow-lg shadow-violet-900/50' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'}`}
+                >
+                  Open
+                </button>
+                {[1, 2, 3, 4, 5].map(hours => (
+                  <button
+                    key={hours}
+                    onClick={() => setSelectedDuration(hours * 60)}
+                    className={`p-2 rounded text-sm font-bold border transition-all ${selectedDuration === hours * 60 ? 'bg-violet-600 border-violet-500 text-white shadow-lg shadow-violet-900/50' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'}`}
+                  >
+                    {hours} Hours
+                  </button>
+                ))}
+              </div>
+              {selectedDuration > 0 && (
+                <div className="mt-2 text-center text-xs text-amber-400 flex items-center justify-center gap-1 animate-fade-in">
+                  <Timer size={12} /> Session will automatically end after {selectedDuration / 60} hours.
+                </div>
+              )}
             </div>
 
             <Button className="w-full py-3" onClick={handleStartRental} disabled={actionLoading}>
