@@ -351,6 +351,12 @@ export default function App() {
   const [showHistoryPaymentModal, setShowHistoryPaymentModal] = useState(false);
   const [selectedHistoryRental, setSelectedHistoryRental] = useState<RentalSession | null>(null);
 
+  // History Server-Side Data State
+  const [historyItems, setHistoryItems] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyDate, setHistoryDate] = useState(new Date());
+
   // --- DATA FETCHING ---
 
   const fetchData = useCallback(async () => {
@@ -439,6 +445,95 @@ export default function App() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // --- SERVER-SIDE HISTORY FETCHING ---
+  useEffect(() => {
+    const loadHistory = async () => {
+      setHistoryLoading(true);
+      try {
+        let start: Date, end: Date;
+        const d = new Date(historyDate);
+
+        if (historyFilter === 'daily') {
+          start = new Date(d); start.setHours(0, 0, 0, 0);
+          end = new Date(d); end.setHours(23, 59, 59, 999);
+        } else if (historyFilter === 'weekly') {
+          const day = d.getDay() || 7;
+          start = new Date(d);
+          if (day !== 1) start.setHours(-24 * (day - 1));
+          start.setHours(0, 0, 0, 0);
+          end = new Date(start);
+          end.setDate(end.getDate() + 6);
+          end.setHours(23, 59, 59, 999);
+        } else {
+          start = new Date(d.getFullYear(), d.getMonth(), 1);
+          end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+        }
+
+        if (!isSupabaseConfigured) {
+          // Mock Mode: Filter the mocks
+          const mockData = [
+            ...MOCK_RENTALS.map(r => ({ ...r, type: 'rental', date: new Date(r.startTime) })),
+            ...MOCK_MEMBERSHIP_LOGS.map(l => ({ ...l, type: 'membership', date: new Date(l.timestamp) })),
+            ...MOCK_EXPENSES.map(e => ({ ...e, type: 'expense', date: new Date(e.timestamp) }))
+          ].filter(i => i.date >= start && i.date <= end)
+            .sort((a, b) => b.date.getTime() - a.date.getTime());
+          setHistoryItems(mockData);
+        } else {
+          // Real DB Mode: Fetch range
+          const [rRes, mRes, eRes] = await Promise.all([
+            supabase.from('rentals').select('*').gte('start_time', start.toISOString()).lte('start_time', end.toISOString()),
+            supabase.from('membership_logs').select('*').gte('timestamp', start.toISOString()).lte('timestamp', end.toISOString()),
+            supabase.from('expenses').select('*').gte('timestamp', start.toISOString()).lte('timestamp', end.toISOString())
+          ]);
+
+          const dbData = [
+            ...(rRes.data || []).map((r: any) => ({
+              ...r,
+              consoleId: r.console_id,
+              customerName: r.customer_name,
+              memberId: r.member_id,
+              startTime: r.start_time,
+              items: r.items || [],
+              subtotalRental: r.subtotal_rental,
+              subtotalItems: r.subtotal_items,
+              discountAmount: r.discount_amount,
+              totalPrice: r.total_price,
+              isPaid: r.is_paid,
+              type: 'rental',
+              date: new Date(r.start_time)
+            })),
+            ...(mRes.data || []).map((l: any) => ({
+              id: l.id,
+              memberName: l.member_name,
+              packageType: l.package_type,
+              amount: l.amount,
+              note: l.note,
+              type: 'membership',
+              date: new Date(l.timestamp)
+            })),
+            ...(eRes.data || []).map((e: any) => ({
+              id: e.id,
+              note: e.note,
+              amount: e.amount,
+              staffName: e.staff_name,
+              type: 'expense',
+              date: new Date(e.timestamp)
+            }))
+          ].sort((a: any, b: any) => b.date.getTime() - a.date.getTime());
+
+          setHistoryItems(dbData);
+        }
+      } catch (e) {
+        console.error("History fetch error", e);
+      } finally {
+        setHistoryLoading(false);
+        setHistoryPage(1);
+      }
+    };
+
+    loadHistory();
+  }, [historyFilter, historyDate, isSupabaseConfigured]);
 
   // --- HELPERS ---
 
@@ -1938,34 +2033,126 @@ export default function App() {
 
   const renderHistory = () => {
     // Combine data
-    const allHistory = [
-      ...rentals.filter(r => !r.isActive).map(r => ({ ...r, type: 'rental' as const, date: new Date(r.startTime) })),
-      ...membershipLogs.map(l => ({ ...l, type: 'membership' as const, date: new Date(l.timestamp) })),
-      ...expenses.map(e => ({ ...e, type: 'expense' as const, date: new Date(e.timestamp) }))
-    ].sort((a, b) => b.date.getTime() - a.date.getTime());
+    // const allHistory = [
+    //   ...rentals.filter(r => !r.isActive).map(r => ({ ...r, type: 'rental' as const, date: new Date(r.startTime) })),
+    //   ...membershipLogs.map(l => ({ ...l, type: 'membership' as const, date: new Date(l.timestamp) })),
+    //   ...expenses.map(e => ({ ...e, type: 'expense' as const, date: new Date(e.timestamp) }))
+    // ].sort((a, b) => b.date.getTime() - a.date.getTime());
 
     // Filter
-    const now = new Date();
-    const filteredHistory = allHistory.filter(item => {
-      const itemDate = item.date;
-      if (historyFilter === 'daily') {
-        return itemDate.toDateString() === now.toDateString();
-      } else if (historyFilter === 'weekly') {
-        const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        return itemDate >= oneWeekAgo;
-      } else {
-        const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        return itemDate >= oneMonthAgo;
-      }
-    });
+    // const filteredHistory = allHistory.filter(item => {
+    //   const itemDate = item.date;
+
+    //   if (historyFilter === 'daily') {
+    //     return itemDate.toDateString() === historyDate.toDateString();
+    //   } else if (historyFilter === 'weekly') {
+    //     const startOfWeek = new Date(historyDate);
+    //     const day = startOfWeek.getDay() || 7; // Get current day number, converting Sun (0) to 7
+    //     if (day !== 1) startOfWeek.setHours(-24 * (day - 1)); // Set to previous Monday
+    //     startOfWeek.setHours(0, 0, 0, 0);
+
+    //     const endOfWeek = new Date(startOfWeek);
+    //     endOfWeek.setDate(endOfWeek.getDate() + 6);
+    //     endOfWeek.setHours(23, 59, 59, 999);
+
+    //     return itemDate >= startOfWeek && itemDate <= endOfWeek;
+    //   } else {
+    //     return itemDate.getMonth() === historyDate.getMonth() && itemDate.getFullYear() === historyDate.getFullYear();
+    //   }
+    // });
+
+    // --- Server-Side Fetching Logic for History ---
+    // Instead of filtering allHistory (which is currently global state), 
+    // we should ideally fetch this from the server if we want true SSR behavior.
+    // However, since we already have 'rentals', 'membershipLogs', 'expenses' loaded in global state for the active view,
+    // and to respect the "Server-Side Render" request which typically implies "Fetch what is needed":
+    // We will simulate the "Server-Side" behavior by strictly using an Effect to update 'historyItems' 
+    // whenever the filter/date changes, effectively decoupling it from the passive global stream 
+    // and mimicking an on-demand fetch. 
+    // In a real larger app, this 'fetchHistory' would call supabase.from(...).select().gte().lte() directly.
+
+    // For this implementation, we will perform the filtering here and update a dedicated list,
+    // which aligns with the request to make the list behave like a server-rendered list (paginated, specific).
+    // Note: To fully implement robust server-side fetching for 3 different tables (Union), 
+    // we would typically use a Supabase View or multiple async requests.
+    // We will implement the multiple async requests approach here to honor the "Server-Side" request.
+
+
+
+    // Calculate Totals from the Fetched Range
+    const totalRevenue = historyItems.reduce((sum, item) => {
+      if (item.type === 'rental') return sum + (item.totalPrice || 0);
+      if (item.type === 'membership') return sum + (item.amount || 0);
+      return sum;
+    }, 0);
+
+    const totalExpenses = historyItems.reduce((sum, item) => {
+      if (item.type === 'expense') return sum + (item.amount || 0);
+      return sum;
+    }, 0);
+
+    const netProfit = totalRevenue - totalExpenses;
+
+    // Pagination
+    const ITEMS_PER_PAGE = 10;
+    const totalPages = Math.ceil(historyItems.length / ITEMS_PER_PAGE);
+    const paginatedHistory = historyItems.slice((historyPage - 1) * ITEMS_PER_PAGE, historyPage * ITEMS_PER_PAGE);
+
+    const renderPaginationControls = () => (
+      <div className="flex justify-center items-center gap-4 mt-6">
+        <Button
+          variant="ghost"
+          onClick={() => setHistoryPage(prev => Math.max(1, prev - 1))}
+          disabled={historyPage === 1 || historyLoading}
+          className="px-3 py-1.5 text-sm"
+        >
+          Previous
+        </Button>
+        <span className="text-sm text-slate-400">
+          Page {historyPage} of {totalPages === 0 ? 1 : totalPages}
+        </span>
+        <Button
+          variant="ghost"
+          onClick={() => setHistoryPage(prev => Math.min(totalPages, prev + 1))}
+          disabled={historyPage === totalPages || totalPages === 0 || historyLoading}
+          className="px-3 py-1.5 text-sm"
+        >
+          Next
+        </Button>
+      </div>
+    );
 
     return (
       <div className="space-y-6 pb-24 animate-fade-in">
         <header className="flex justify-between items-center">
           <h1 className="text-2xl font-bold text-white">History</h1>
-          <Button variant="secondary" onClick={handleExportExcel} className="text-sm px-3">
-            <FileSpreadsheet size={16} /> Export
-          </Button>
+          <div className="flex gap-2">
+            {historyFilter === 'monthly' ? (
+              <input
+                type="month"
+                value={`${historyDate.getFullYear()}-${String(historyDate.getMonth() + 1).padStart(2, '0')}`}
+                onChange={(e) => {
+                  if (e.target.value) setHistoryDate(new Date(e.target.value + '-01'));
+                }}
+                className="bg-slate-800 border border-slate-700 text-white text-xs rounded px-2 py-1 outline-none focus:border-violet-500"
+              />
+            ) : (
+              <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded px-2 py-1">
+                <span className="text-xs text-slate-400">{historyFilter === 'weekly' ? 'Week of:' : 'Date:'}</span>
+                <input
+                  type="date"
+                  value={`${historyDate.getFullYear()}-${String(historyDate.getMonth() + 1).padStart(2, '0')}-${String(historyDate.getDate()).padStart(2, '0')}`}
+                  onChange={(e) => {
+                    if (e.target.value) setHistoryDate(new Date(e.target.value));
+                  }}
+                  className="bg-transparent text-white text-xs outline-none w-28"
+                />
+              </div>
+            )}
+            <Button variant="secondary" onClick={handleExportExcel} className="text-sm px-3 py-1 h-8">
+              <FileSpreadsheet size={16} /> Export
+            </Button>
+          </div>
         </header>
 
         <div className="flex bg-slate-800 p-1 rounded-lg">
@@ -1981,14 +2168,40 @@ export default function App() {
           ))}
         </div>
 
+        {/* Summary Card - Daily Only */}
+        {historyFilter === 'daily' && (
+          <div className="grid grid-cols-3 gap-4 mb-4">
+            <Card className="bg-emerald-500/10 border-emerald-500/20 p-3">
+              <p className="text-xs text-emerald-400 uppercase font-bold mb-1">Total Revenue</p>
+              <p className="text-xl font-bold text-white font-mono">+{APP_SETTINGS.currency}{totalRevenue.toLocaleString()}</p>
+            </Card>
+            <Card className="bg-rose-500/10 border-rose-500/20 p-3">
+              <p className="text-xs text-rose-400 uppercase font-bold mb-1">Total Expenses</p>
+              <p className="text-xl font-bold text-white font-mono">-{APP_SETTINGS.currency}{totalExpenses.toLocaleString()}</p>
+            </Card>
+            <Card className="bg-blue-500/10 border-blue-500/20 p-3">
+              <p className="text-xs text-blue-400 uppercase font-bold mb-1">Net Profit</p>
+              <p className={`text-xl font-bold font-mono ${netProfit >= 0 ? 'text-white' : 'text-rose-400'}`}>
+                {netProfit >= 0 ? '+' : ''}{APP_SETTINGS.currency}{netProfit.toLocaleString()}
+              </p>
+            </Card>
+          </div>
+        )}
+
+        {renderPaginationControls()}
+
         <div className="space-y-3">
-          {filteredHistory.length === 0 ? (
+          {historyLoading ? (
+            <div className="text-center py-20 text-slate-500 animate-pulse">
+              <p>Loading history data...</p>
+            </div>
+          ) : paginatedHistory.length === 0 ? (
             <div className="text-center py-10 text-slate-500">
               <History size={48} className="mx-auto mb-4 opacity-20" />
               <p>No history records for this period.</p>
             </div>
           ) : (
-            filteredHistory.map((item: any, idx) => {
+            paginatedHistory.map((item: any, idx) => {
               if (item.type === 'rental') {
                 return (
                   <Card key={`h_${idx}`} className="flex justify-between items-center border-l-4 border-l-violet-500">
